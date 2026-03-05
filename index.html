@@ -1,0 +1,1403 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Python Concepts Hangman</title>
+<link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@700;900&family=Exo+2:wght@300;400;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg:         #0a0e1a;
+    --panel:      #0f1628;
+    --border:     #1a2a4a;
+    --teal:       #00e5cc;
+    --gold:       #f5c518;
+    --danger:     #ff4757;
+    --dim:        #2a3a5a;
+    --text:       #c8d8f0;
+    --muted:      #4a6a8a;
+    --glow-teal:  0 0 12px #00e5cc88;
+    --glow-gold:  0 0 12px #f5c51888;
+    --glow-danger:0 0 12px #ff475766;
+  }
+
+  *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    font-family: 'Share Tech Mono', monospace;
+    background: var(--bg);
+    color: var(--text);
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 20px 10px 40px;
+    overflow-x: hidden;
+  }
+
+  /* ambient glow layers */
+  body::before {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background:
+      radial-gradient(ellipse at 20% 10%, #00e5cc0e 0%, transparent 55%),
+      radial-gradient(ellipse at 80% 90%, #f5c51806 0%, transparent 55%);
+    pointer-events: none;
+    z-index: 0;
+  }
+
+  /* scanlines */
+  body::after {
+    content: '';
+    position: fixed;
+    inset: 0;
+    background: repeating-linear-gradient(
+      to bottom,
+      transparent 0px,
+      transparent 3px,
+      rgba(0,0,0,0.05) 3px,
+      rgba(0,0,0,0.05) 4px
+    );
+    pointer-events: none;
+    z-index: 998;
+  }
+
+  /* ── HEADER ── */
+  header {
+    text-align: center;
+    margin-bottom: 20px;
+    position: relative;
+    z-index: 1;
+  }
+
+  .game-title {
+    font-family: 'Orbitron', sans-serif;
+    font-size: clamp(1.4rem, 4vw, 2.2rem);
+    font-weight: 900;
+    color: var(--teal);
+    text-shadow: var(--glow-teal);
+    letter-spacing: 3px;
+  }
+
+  .game-subtitle {
+    font-family: 'Exo 2', sans-serif;
+    font-size: 0.75rem;
+    color: var(--gold);
+    letter-spacing: 6px;
+    text-transform: uppercase;
+    margin-top: 6px;
+    opacity: 0.8;
+  }
+
+  /* ── WRAPPER ── */
+  .wrapper {
+    width: 100%;
+    max-width: 900px;
+    display: flex;
+    flex-direction: column;
+    gap: 14px;
+    position: relative;
+    z-index: 1;
+  }
+
+  /* ── SHARED PANEL ── */
+  .panel {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 4px;
+    padding: 20px;
+    position: relative;
+  }
+
+  .panel::before {
+    content: '';
+    position: absolute;
+    top: 0; left: 0; right: 0;
+    height: 2px;
+    background: linear-gradient(90deg, transparent, var(--teal), transparent);
+    opacity: 0.5;
+    border-radius: 4px 4px 0 0;
+  }
+
+  .panel-label {
+    font-size: 0.6rem;
+    letter-spacing: 4px;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 14px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .panel-label::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: var(--border);
+  }
+
+  /* ── TEAM PANEL ── */
+  .team-panel::before {
+    background: linear-gradient(90deg, transparent, var(--gold), transparent);
+  }
+
+  .team-top {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    flex-wrap: wrap;
+  }
+
+  .team-input {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.85rem;
+    background: var(--dim);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    padding: 8px 12px;
+    flex: 1;
+    min-width: 140px;
+    max-width: 220px;
+    outline: none;
+    transition: border-color 0.2s;
+  }
+
+  .team-input:focus { border-color: var(--gold); }
+  .team-input::placeholder { color: var(--muted); }
+
+  .btn-add-team {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.65rem;
+    letter-spacing: 2px;
+    background: transparent;
+    color: var(--gold);
+    border: 1px solid var(--gold);
+    padding: 8px 16px;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s, box-shadow 0.2s;
+    white-space: nowrap;
+  }
+
+  .btn-add-team:hover {
+    background: var(--gold);
+    color: var(--bg);
+    box-shadow: var(--glow-gold);
+  }
+
+  /* teams-row: always in DOM, hint lives here as a CSS toggle */
+  .teams-row {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin-top: 12px;
+    min-height: 24px;
+    align-items: center;
+  }
+
+  /* hint is a static sibling rendered once; hidden via class */
+  .no-teams-hint {
+    font-family: 'Exo 2', sans-serif;
+    font-size: 0.8rem;
+    color: var(--muted);
+    font-style: italic;
+  }
+
+  .no-teams-hint.hidden { display: none; }
+
+  .team-card {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 7px 12px;
+    border-radius: 3px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+    cursor: pointer;
+    transition: border-color 0.2s, background 0.2s, box-shadow 0.2s;
+  }
+
+  .team-card:hover { border-color: var(--muted); }
+
+  .team-card.active {
+    border-color: var(--gold);
+    background: #f5c51810;
+    box-shadow: var(--glow-gold);
+  }
+
+  .active-badge {
+    font-size: 0.55rem;
+    letter-spacing: 2px;
+    color: var(--gold);
+    text-transform: uppercase;
+    display: none;
+  }
+
+  .team-card.active .active-badge { display: inline; }
+
+  .team-name {
+    font-family: 'Exo 2', sans-serif;
+    font-size: 0.85rem;
+    font-weight: 600;
+    color: var(--text);
+  }
+
+  .team-card.active .team-name { color: var(--gold); }
+
+  .team-score {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.9rem;
+    font-weight: 700;
+    color: var(--teal);
+  }
+
+  .team-card.active .team-score { color: var(--gold); text-shadow: var(--glow-gold); }
+
+  .btn-remove-team {
+    background: none;
+    border: none;
+    color: var(--muted);
+    cursor: pointer;
+    font-size: 0.9rem;
+    line-height: 1;
+    padding: 0 0 0 4px;
+    transition: color 0.15s;
+  }
+
+  .btn-remove-team:hover { color: var(--danger); }
+
+  /* ── PROGRESS BAR ── */
+  .progress-bar {
+    width: 100%;
+    height: 3px;
+    background: var(--dim);
+    border-radius: 2px;
+    overflow: hidden;
+  }
+
+  .progress-fill {
+    height: 100%;
+    background: linear-gradient(90deg, var(--teal), var(--gold));
+    border-radius: 2px;
+    transition: width 0.5s ease;
+    width: 0%;
+  }
+
+  /* ── GAME GRID ── */
+  .game-container {
+    width: 100%;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 14px;
+  }
+
+  @media (max-width: 640px) { .game-container { grid-template-columns: 1fr; } }
+
+  /* ── GALLOWS ── */
+  svg#gallows {
+    width: 100%;
+    max-width: 200px;
+    display: block;
+    margin: 0 auto;
+  }
+
+  .gallows-line {
+    stroke: var(--teal);
+    stroke-width: 2.5;
+    stroke-linecap: round;
+    opacity: 0.7;
+  }
+
+  .body-part {
+    stroke: var(--danger);
+    stroke-width: 2.5;
+    stroke-linecap: round;
+    fill: none;
+    opacity: 0;
+    transition: opacity 0.3s ease;
+  }
+
+  .body-part.visible { opacity: 1; }
+
+  /* ── UNDO BUTTON ── */
+  .btn-reset-mistake {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    width: 100%;
+    margin-top: 14px;
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 2px;
+    background: transparent;
+    color: var(--danger);
+    border: 1px solid rgba(255,71,85,0.35);
+    padding: 8px 12px;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: background 0.2s, border-color 0.2s, box-shadow 0.2s;
+    text-transform: uppercase;
+  }
+
+  .btn-reset-mistake:not(:disabled):hover {
+    background: rgba(255,71,85,0.1);
+    border-color: var(--danger);
+    box-shadow: var(--glow-danger);
+  }
+
+  .btn-reset-mistake:disabled {
+    opacity: 0.25;
+    cursor: not-allowed;
+  }
+
+  /* ── WRONG LETTERS ── */
+  #wrong-letters {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    min-height: 24px;
+    margin-top: 8px;
+  }
+
+  .wrong-letter {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.75rem;
+    color: var(--danger);
+    background: rgba(255,71,85,0.08);
+    border: 1px solid rgba(255,71,85,0.35);
+    padding: 2px 8px;
+    border-radius: 2px;
+    animation: fadeIn 0.2s ease both;
+  }
+
+  /* ── CLUE PANEL ── */
+  .clue-category {
+    font-size: 0.65rem;
+    letter-spacing: 3px;
+    color: var(--gold);
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+
+  .clue-text {
+    font-family: 'Exo 2', sans-serif;
+    font-size: 0.85rem;
+    line-height: 1.7;
+    color: var(--text);
+    max-height: 160px;
+    overflow-y: auto;
+    padding-right: 4px;
+  }
+
+  .clue-text::-webkit-scrollbar { width: 4px; }
+  .clue-text::-webkit-scrollbar-track { background: var(--dim); }
+  .clue-text::-webkit-scrollbar-thumb { background: var(--teal); border-radius: 2px; }
+
+  /* ── STATS ── */
+  .stats-row {
+    display: flex;
+    justify-content: space-between;
+    margin-top: 16px;
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+
+  .stat-box {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    font-size: 0.65rem;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+  }
+
+  .stat-value {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 1rem;
+    font-weight: 700;
+  }
+
+  .stat-value.danger { color: var(--danger); text-shadow: var(--glow-danger); }
+  .stat-value.safe   { color: var(--teal);   text-shadow: var(--glow-teal);   }
+  .stat-value.gold   { color: var(--gold);   text-shadow: var(--glow-gold);   }
+
+  /* ── TURN INDICATOR ── */
+  .turn-indicator {
+    margin-top: 14px;
+    padding: 8px 12px;
+    background: rgba(245,197,24,0.06);
+    border: 1px solid rgba(245,197,24,0.25);
+    border-radius: 3px;
+    font-size: 0.7rem;
+    letter-spacing: 2px;
+    color: var(--gold);
+    text-transform: uppercase;
+    text-align: center;
+    visibility: hidden;  /* preserves layout space; shown via JS */
+  }
+
+  .turn-indicator.visible { visibility: visible; }
+
+  /* ── WORD DISPLAY ── */
+  .word-panel,
+  .keyboard-panel { grid-column: span 2; }
+
+  @media (max-width: 640px) {
+    .word-panel,
+    .keyboard-panel { grid-column: span 1; }
+  }
+
+  #word-display {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: center;
+    margin: 8px 0;
+    min-height: 54px;
+    align-items: center;
+  }
+
+  .letter-slot {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+  }
+
+  .letter-char {
+    font-family: 'Orbitron', sans-serif;
+    font-size: clamp(1rem, 3vw, 1.5rem);
+    font-weight: 700;
+    color: var(--teal);
+    text-shadow: var(--glow-teal);
+    min-width: 28px;
+    text-align: center;
+    height: 32px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .letter-char.revealed { animation: pop 0.3s ease both; }
+
+  .letter-line { width: 28px; height: 2px; background: var(--muted); }
+  .space-slot  { width: 16px; }
+
+  /* ── KEYBOARD ── */
+  #keyboard {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 6px;
+    justify-content: center;
+  }
+
+  .key-btn {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.85rem;
+    background: var(--dim);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 3px;
+    width: 38px;
+    height: 38px;
+    cursor: pointer;
+    transition: background 0.15s, color 0.15s, border-color 0.15s,
+                box-shadow 0.15s, transform 0.15s;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
+
+  .key-btn:not(:disabled):hover {
+    background: var(--teal);
+    color: var(--bg);
+    border-color: var(--teal);
+    box-shadow: var(--glow-teal);
+    transform: translateY(-1px);
+  }
+
+  .key-btn:disabled { cursor: not-allowed; opacity: 0.25; }
+  .key-btn.hit  { background: rgba(0,229,204,0.1);  border-color: var(--teal);   color: var(--teal);   }
+  .key-btn.miss { background: rgba(255,71,85,0.08); border-color: var(--danger); color: var(--danger); opacity: 0.5; }
+
+  /* ── RESULT OVERLAY ── */
+  .message-overlay {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: rgba(10,14,26,0.92);
+    z-index: 200;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(4px);
+  }
+
+  .message-overlay.active { display: flex; }
+
+  .message-box {
+    text-align: center;
+    padding: 36px 44px;
+    background: var(--panel);
+    border: 1px solid var(--teal);
+    border-radius: 4px;
+    box-shadow: 0 0 40px rgba(0,229,204,0.13);
+    max-width: 500px;
+    width: 90%;
+    max-height: 90vh;
+    overflow-y: auto;
+  }
+
+  .message-status {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 1.8rem;
+    font-weight: 900;
+    margin-bottom: 8px;
+  }
+
+  .message-status.win  { color: var(--gold);   text-shadow: var(--glow-gold);   }
+  .message-status.lose { color: var(--danger);  text-shadow: var(--glow-danger); }
+
+  .message-answer {
+    font-size: 0.7rem;
+    color: var(--muted);
+    letter-spacing: 2px;
+    margin-bottom: 4px;
+    text-transform: uppercase;
+  }
+
+  .message-word {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 1.1rem;
+    color: var(--teal);
+    letter-spacing: 3px;
+    margin-bottom: 20px;
+  }
+
+  .award-row {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    margin-bottom: 14px;
+    font-size: 0.75rem;
+    color: var(--muted);
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    flex-wrap: wrap;
+  }
+
+  .award-team   { font-family: 'Exo 2', sans-serif; font-weight: 700; font-size: 0.9rem; color: var(--gold); }
+  .award-points { font-family: 'Orbitron', sans-serif; font-size: 1rem; color: var(--gold); text-shadow: var(--glow-gold); }
+
+  .next-team-hint {
+    font-family: 'Exo 2', sans-serif;
+    font-size: 0.75rem;
+    color: var(--teal);
+    margin-bottom: 14px;
+    opacity: 0.8;
+  }
+
+  .btn-next {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.7rem;
+    letter-spacing: 3px;
+    background: transparent;
+    color: var(--teal);
+    border: 1px solid var(--teal);
+    padding: 11px 28px;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: background 0.2s, color 0.2s, box-shadow 0.2s;
+    text-transform: uppercase;
+  }
+
+  .btn-next:hover { background: var(--teal); color: var(--bg); box-shadow: var(--glow-teal); }
+
+  /* ── LEADERBOARD (final screen) ── */
+  .leaderboard { margin-bottom: 18px; }
+
+  .leaderboard-title {
+    font-size: 0.6rem;
+    letter-spacing: 4px;
+    color: var(--muted);
+    text-transform: uppercase;
+    margin-bottom: 10px;
+  }
+
+  .lb-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 12px;
+    margin-bottom: 6px;
+    border-radius: 3px;
+    border: 1px solid var(--border);
+    background: var(--bg);
+  }
+
+  .lb-row.first {
+    border-color: var(--gold);
+    background: rgba(245,197,24,0.07);
+  }
+
+  .lb-name {
+    font-family: 'Exo 2', sans-serif;
+    font-size: 0.85rem;
+    color: var(--text);
+  }
+
+  .lb-row.first .lb-name { color: var(--gold); }
+
+  .lb-score {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.95rem;
+    color: var(--teal);
+    text-shadow: var(--glow-teal);
+  }
+
+  .lb-row.first .lb-score { color: var(--gold); text-shadow: var(--glow-gold); }
+
+  /* ── GAME TOP BAR ── */
+  .game-topbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+  }
+
+  .game-topbar-label {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.65rem;
+    letter-spacing: 4px;
+    color: var(--muted);
+    text-transform: uppercase;
+  }
+
+  .btn-reset-game {
+    font-family: 'Share Tech Mono', monospace;
+    font-size: 0.7rem;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    background: transparent;
+    color: var(--muted);
+    border: 1px solid var(--border);
+    padding: 7px 16px;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: color 0.2s, border-color 0.2s, background 0.2s;
+    white-space: nowrap;
+  }
+
+  .btn-reset-game:hover {
+    color: var(--danger);
+    border-color: var(--danger);
+    background: rgba(255,71,85,0.08);
+  }
+
+  /* ── SETUP / GAME SCREENS ── */
+  #setup-screen  { display: flex; flex-direction: column; gap: 14px; }
+  #game-screen   { display: none; flex-direction: column; gap: 14px; }
+  #game-screen.active { display: flex; }
+
+  .btn-start-game {
+    font-family: 'Orbitron', sans-serif;
+    font-size: 0.85rem;
+    font-weight: 700;
+    letter-spacing: 4px;
+    text-transform: uppercase;
+    background: transparent;
+    color: var(--teal);
+    border: 2px solid var(--teal);
+    padding: 16px 40px;
+    border-radius: 4px;
+    cursor: pointer;
+    width: 100%;
+    transition: background 0.2s, color 0.2s, box-shadow 0.2s, transform 0.15s;
+    margin-top: 4px;
+  }
+
+  .btn-start-game:hover {
+    background: var(--teal);
+    color: var(--bg);
+    box-shadow: 0 0 24px #00e5cc66;
+    transform: translateY(-2px);
+  }
+
+  .setup-note {
+    font-family: 'Exo 2', sans-serif;
+    font-size: 0.78rem;
+    color: var(--muted);
+    text-align: center;
+    margin-top: 2px;
+  }
+
+  /* ── ANIMATIONS ── */
+  @keyframes pop {
+    0%   { transform: scale(0.4); opacity: 0; }
+    70%  { transform: scale(1.15); }
+    100% { transform: scale(1);   opacity: 1; }
+  }
+
+  @keyframes fadeIn {
+    from { opacity: 0; transform: scale(0.8); }
+    to   { opacity: 1; transform: scale(1); }
+  }
+
+  @keyframes shake {
+    0%,100% { transform: translateX(0); }
+    20%     { transform: translateX(-6px); }
+    40%     { transform: translateX(6px); }
+    60%     { transform: translateX(-4px); }
+    80%     { transform: translateX(4px); }
+  }
+
+  .shake { animation: shake 0.4s ease; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="game-title">PYTHON HANGMAN</div>
+  <div class="game-subtitle">Core Concepts Edition</div>
+</header>
+
+<div class="wrapper">
+
+  <!-- ══ SETUP SCREEN ══ -->
+  <div id="setup-screen">
+
+    <!-- TEAM PANEL -->
+    <div class="panel team-panel">
+      <div class="panel-label">Teams</div>
+      <div class="team-top">
+        <input class="team-input" id="team-input" type="text"
+               placeholder="Enter team name…" maxlength="24" autocomplete="off">
+        <button class="btn-add-team" id="btn-add-team">+ Add Team</button>
+      </div>
+      <!-- hint is a SIBLING of teams-row so innerHTML='' never destroys it -->
+      <p class="no-teams-hint" id="no-teams-hint" style="margin-top:10px;">
+        No teams yet — add teams to track scores, or play solo!
+      </p>
+      <div class="teams-row" id="teams-row"></div>
+    </div>
+
+    <button class="btn-start-game" id="btn-start-game">▶ &nbsp; Start Game</button>
+    <p class="setup-note">Teams are optional — you can play solo or add up to 8 teams.</p>
+
+  </div><!-- #setup-screen -->
+
+  <!-- ══ GAME SCREEN ══ -->
+  <div id="game-screen">
+
+  <!-- GAME TOP BAR -->
+  <div class="game-topbar">
+    <span class="game-topbar-label">Python Hangman</span>
+    <button class="btn-reset-game" id="btn-reset-game">&#8635; &nbsp;Reset Game</button>
+  </div>
+
+  <!-- PROGRESS -->
+  <div class="progress-bar">
+    <div class="progress-fill" id="progress-fill"></div>
+  </div>
+
+  <!-- GAME GRID -->
+  <div class="game-container">
+
+    <!-- LEFT: Gallows + undo + wrong letters -->
+    <div class="panel">
+      <div class="panel-label">Status</div>
+      <svg id="gallows" viewBox="0 0 160 200">
+        <line class="gallows-line" x1="20"  y1="190" x2="140" y2="190"/>
+        <line class="gallows-line" x1="50"  y1="190" x2="50"  y2="20"/>
+        <line class="gallows-line" x1="50"  y1="20"  x2="100" y2="20"/>
+        <line class="gallows-line" x1="100" y1="20"  x2="100" y2="45"/>
+        <circle id="part-head" class="body-part" cx="100" cy="58" r="13"/>
+        <line   id="part-body" class="body-part" x1="100" y1="71"  x2="100" y2="120"/>
+        <line   id="part-larm" class="body-part" x1="100" y1="82"  x2="78"  y2="105"/>
+        <line   id="part-rarm" class="body-part" x1="100" y1="82"  x2="122" y2="105"/>
+        <line   id="part-lleg" class="body-part" x1="100" y1="120" x2="78"  y2="148"/>
+        <line   id="part-rleg" class="body-part" x1="100" y1="120" x2="122" y2="148"/>
+      </svg>
+
+      <button class="btn-reset-mistake" id="btn-reset-mistake" disabled>
+        ↩ Undo Last Mistake
+      </button>
+
+      <div style="margin-top:14px;">
+        <div class="panel-label">Wrong Guesses</div>
+        <div id="wrong-letters"></div>
+      </div>
+    </div>
+
+    <!-- RIGHT: Clue + stats + turn indicator -->
+    <div class="panel">
+      <div class="panel-label">Clue</div>
+      <div class="clue-category" id="clue-category"></div>
+      <div class="clue-text"     id="clue-text"></div>
+
+      <div class="stats-row">
+        <div class="stat-box">
+          <span>Lives</span>
+          <span class="stat-value safe" id="lives-display">6</span>
+        </div>
+        <div class="stat-box">
+          <span>Round</span>
+          <span class="stat-value safe" id="round-display">1</span>
+        </div>
+        <div class="stat-box">
+          <span>Score</span>
+          <span class="stat-value gold" id="score-display">0</span>
+        </div>
+      </div>
+
+      <div class="turn-indicator" id="turn-indicator">
+        Active Team: <span id="active-team-name">—</span>
+      </div>
+    </div>
+
+    <!-- WORD DISPLAY -->
+    <div class="panel word-panel">
+      <div class="panel-label">Decode the Term</div>
+      <div id="word-display"></div>
+    </div>
+
+    <!-- KEYBOARD -->
+    <div class="panel keyboard-panel">
+      <div class="panel-label">Select a Letter &nbsp;·&nbsp; or press a key</div>
+      <div id="keyboard"></div>
+    </div>
+
+  </div><!-- .game-container -->
+  </div><!-- #game-screen -->
+</div><!-- .wrapper -->
+
+<!-- RESULT OVERLAY -->
+<div class="message-overlay" id="message-overlay" role="dialog" aria-modal="true">
+  <div class="message-box">
+    <div class="message-status" id="message-status"></div>
+    <div id="message-body"></div>
+    <div class="award-row"   id="award-row"></div>
+    <div class="next-team-hint" id="next-team-hint"></div>
+    <div class="message-answer" id="msg-answer-label">The answer was:</div>
+    <div class="message-word"   id="message-word"></div>
+    <button class="btn-next" id="btn-next">Next Round →</button>
+  </div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════
+   DATA
+═══════════════════════════════════════════ */
+const TERMS = [
+  { word: "LIST",        category: "Data Structures",        clue: "A sequence of zero or more elements of any type. Uses the subscript operator for access, supports concatenation, comparison, and the 'in' operator. It is mutable — elements can be replaced, added, or removed." },
+  { word: "LEN",         category: "Built-in Functions",     clue: "This built-in function returns the number of elements in its argument. It works on lists, strings, tuples, and other sequences. If a list has 5 items, calling this returns the integer 5." },
+  { word: "MUTABLE",     category: "Data Structure Properties", clue: "A data structure with this property can be changed after it is created. Lists have this property — you can replace, add, or remove elements. Tuples do NOT have this property." },
+  { word: "SLICE",       category: "List Operations",        clue: "An operation on a list or string that returns a sub-sequence. Uses bracket notation with a colon, like my_list[1:4], to extract a portion of the original sequence without modifying it." },
+  { word: "INDEX",       category: "List Methods",           clue: "This list method returns the position of a target element. If the element is not present, an error is raised. Positions in a list start at 0 and go up to length minus 1." },
+  { word: "SORT",        category: "List Methods",           clue: "This list method arranges elements in ascending order in place. It is a mutator method — it modifies the list directly and returns None." },
+  { word: "TUPLE",       category: "Data Structures",        clue: "Similar to a list but has an immutable structure. Once created, its elements cannot be changed, added, or removed. Often written with parentheses instead of square brackets." },
+  { word: "ALIAS",       category: "Variables & Memory",     clue: "When two or more variables refer to the same data object in memory, they are called this. With mutable objects like lists, this can cause unexpected side effects when the shared object is modified." },
+  { word: "SCOPE",       category: "Functions & Namespaces", clue: "The area of program text within which a variable has a given value. Module variables, parameters, and temporary variables each have a different level. Inner levels take precedence over outer ones." },
+  { word: "RETURN",      category: "Functions",              clue: "This keyword sends a value back from a function to its caller. Without it, a function automatically sends back None. It appears inside the body of a function definition." },
+  { word: "DICTIONARY",  category: "Data Structures",        clue: "A data structure that associates keys with values. Organizes data by content rather than position. The subscript operator adds a new key-value pair or replaces an existing value." },
+  { word: "NAMESPACE",   category: "Functions & Namespaces", clue: "The structured environment in which variable names exist in Python. Organized into module variables, parameters, and temporary variables, each with different scopes and lifetimes." },
+  { word: "PARAMETER",   category: "Functions",              clue: "A variable introduced in a function's header that receives its value when the function is called. Its scope is limited to the function body, and exists only for the lifetime of that call." },
+  { word: "MUTATOR",     category: "Methods",                clue: "A method called to change the state of an object. These methods usually return None. List methods like sort() and append() are classic examples." },
+  { word: "ABSTRACTION", category: "Design Concepts",        clue: "A function serves as this mechanism by letting programmers view many things as one. It hides complex code, eliminates redundant patterns, and allows a general method to be applied in varying situations." },
+  { word: "LIFETIME",    category: "Functions & Namespaces", clue: "The duration of program execution during which a variable uses memory storage. Module variables have this for the entire program; parameters and temporary variables only for a single function call." },
+  { word: "KEYS",        category: "Dictionary Methods",     clue: "This dictionary method returns access to all the lookup labels stored in a dictionary. Can be used in a for loop to traverse it. Its counterpart, values(), returns the associated data." },
+  { word: "NONE",        category: "Special Values",         clue: "The special value automatically returned by any function that has no return statement. Mutator methods like list.sort() return this. It represents the explicit absence of any meaningful value." }
+];
+
+const BODY_PARTS  = ['part-head','part-body','part-larm','part-rarm','part-lleg','part-rleg'];
+const MAX_WRONG   = 6;
+
+/* ═══════════════════════════════════════════
+   SAFE getElementById WRAPPER
+   Returns the element or throws a clear error
+   so bugs are obvious during development.
+═══════════════════════════════════════════ */
+function el(id) {
+  const node = document.getElementById(id);
+  if (!node) throw new Error('Missing element: #' + id);
+  return node;
+}
+
+/* ═══════════════════════════════════════════
+   STATE
+═══════════════════════════════════════════ */
+let teams           = [];   // [{name, score}]
+let activeTeamIdx   = 0;
+let score           = 0;
+let round           = 0;
+let lives           = MAX_WRONG;
+let wrongGuesses    = [];
+let guessedLetters  = new Set();
+let currentWord     = '';
+let shuffled        = [];
+let resetUsed       = false;
+
+/* ═══════════════════════════════════════════
+   TEAM MANAGEMENT
+═══════════════════════════════════════════ */
+function renderTeams() {
+  const row  = el('teams-row');
+  const hint = el('no-teams-hint');
+
+  // Show / hide hint (hint is a sibling, never inside row)
+  hint.classList.toggle('hidden', teams.length > 0);
+
+  // Rebuild team cards
+  row.innerHTML = '';
+  teams.forEach((team, i) => {
+    const card = document.createElement('div');
+    card.className = 'team-card' + (i === activeTeamIdx ? ' active' : '');
+
+    const badge  = document.createElement('span');
+    badge.className = 'active-badge';
+    badge.textContent = '▶ Turn';
+
+    const name   = document.createElement('span');
+    name.className = 'team-name';
+    name.textContent = team.name;
+
+    const score  = document.createElement('span');
+    score.className = 'team-score';
+    score.textContent = team.score;
+
+    const removeBtn = document.createElement('button');
+    removeBtn.className = 'btn-remove-team';
+    removeBtn.title = 'Remove team';
+    removeBtn.textContent = '✕';
+    removeBtn.addEventListener('click', function(e) {
+      e.stopPropagation();
+      removeTeam(i);
+    });
+
+    card.appendChild(badge);
+    card.appendChild(name);
+    card.appendChild(score);
+    card.appendChild(removeBtn);
+
+    card.addEventListener('click', function() {
+      activeTeamIdx = i;
+      renderTeams();
+    });
+
+    row.appendChild(card);
+  });
+
+  updateTurnIndicator();
+}
+
+function addTeam() {
+  const input = el('team-input');
+  const name  = input.value.trim();
+  if (!name) return;
+  if (teams.length >= 8) return;
+  if (teams.some(function(t) { return t.name.toLowerCase() === name.toLowerCase(); })) return;
+  teams.push({ name: name, score: 0 });
+  if (teams.length === 1) activeTeamIdx = 0;
+  input.value = '';
+  renderTeams();
+}
+
+function removeTeam(i) {
+  teams.splice(i, 1);
+  if (activeTeamIdx >= teams.length) activeTeamIdx = Math.max(0, teams.length - 1);
+  renderTeams();
+}
+
+function advanceTeam() {
+  if (teams.length > 0) {
+    activeTeamIdx = (activeTeamIdx + 1) % teams.length;
+    renderTeams();
+  }
+}
+
+function updateTurnIndicator() {
+  const ind     = el('turn-indicator');
+  const nameEl  = el('active-team-name');
+  if (teams.length > 0) {
+    ind.classList.add('visible');
+    nameEl.textContent = teams[activeTeamIdx].name;
+  } else {
+    ind.classList.remove('visible');
+  }
+}
+
+el('btn-add-team').addEventListener('click', addTeam);
+el('team-input').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') addTeam();
+});
+
+/* ═══════════════════════════════════════════
+   HELPERS
+═══════════════════════════════════════════ */
+function shuffleArray(arr) {
+  var a = arr.slice();
+  for (var i = a.length - 1; i > 0; i--) {
+    var j = Math.floor(Math.random() * (i + 1));
+    var tmp = a[i]; a[i] = a[j]; a[j] = tmp;
+  }
+  return a;
+}
+
+function setEl(id, prop, value) {
+  var node = document.getElementById(id);
+  if (node) node[prop] = value;
+}
+
+function showEl(id)  { var n = document.getElementById(id); if (n) n.style.display = ''; }
+function hideEl(id)  { var n = document.getElementById(id); if (n) n.style.display = 'none'; }
+
+/* ═══════════════════════════════════════════
+   GAME CORE
+═══════════════════════════════════════════ */
+function startGame() {
+  shuffled = shuffleArray(TERMS);
+  round    = 0;
+  score    = 0;
+  el('score-display').textContent = '0';
+  showEl('msg-answer-label');
+  showEl('message-word');
+  nextRound();
+}
+
+function nextRound() {
+  if (round >= shuffled.length) { showFinalResult(); return; }
+
+  var term   = shuffled[round];
+  currentWord    = term.word;
+  lives          = MAX_WRONG;
+  wrongGuesses   = [];
+  guessedLetters = new Set();
+  resetUsed      = false;
+
+  el('clue-category').textContent  = term.category;
+  el('clue-text').textContent      = term.clue;
+  el('round-display').textContent  = (round + 1) + '/' + shuffled.length;
+  el('progress-fill').style.width  = ((round / shuffled.length) * 100) + '%';
+  el('wrong-letters').innerHTML    = '';
+  el('message-overlay').classList.remove('active');
+  el('btn-reset-mistake').disabled = true;
+
+  updateLives();
+  renderWord();
+  buildKeyboard();
+  BODY_PARTS.forEach(function(id) {
+    var node = document.getElementById(id);
+    if (node) node.classList.remove('visible');
+  });
+  renderTeams();
+}
+
+function renderWord() {
+  var display = el('word-display');
+  display.innerHTML = '';
+  for (var i = 0; i < currentWord.length; i++) {
+    var ch = currentWord[i];
+    if (ch === ' ') {
+      var sp = document.createElement('div');
+      sp.className = 'space-slot';
+      display.appendChild(sp);
+    } else {
+      var slot   = document.createElement('div');
+      slot.className = 'letter-slot';
+
+      var letter = document.createElement('div');
+      letter.className = 'letter-char';
+      letter.id = 'slot-' + i;
+      if (guessedLetters.has(ch)) {
+        letter.textContent = ch;
+        letter.classList.add('revealed');
+      }
+
+      var line = document.createElement('div');
+      line.className = 'letter-line';
+
+      slot.appendChild(letter);
+      slot.appendChild(line);
+      display.appendChild(slot);
+    }
+  }
+}
+
+function buildKeyboard() {
+  var kb = el('keyboard');
+  kb.innerHTML = '';
+  var alpha = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ'.split('');
+  alpha.forEach(function(ch) {
+    var btn       = document.createElement('button');
+    btn.className = 'key-btn';
+    btn.textContent = ch;
+    btn.id        = 'key-' + ch;
+    btn.addEventListener('click', function() { guess(ch); });
+    kb.appendChild(btn);
+  });
+}
+
+function guess(ch) {
+  if (guessedLetters.has(ch)) return;
+  var btn = document.getElementById('key-' + ch);
+  if (!btn || btn.disabled) return;
+
+  guessedLetters.add(ch);
+  btn.disabled = true;
+
+  if (currentWord.indexOf(ch) !== -1) {
+    btn.classList.add('hit');
+    for (var i = 0; i < currentWord.length; i++) {
+      if (currentWord[i] === ch) {
+        var slotEl = document.getElementById('slot-' + i);
+        if (slotEl) {
+          slotEl.textContent = ch;
+          slotEl.classList.add('revealed');
+        }
+      }
+    }
+    if (isWordGuessed()) {
+      var pts = 50 + lives * 10;
+      score  += pts;
+      el('score-display').textContent = score;
+      if (teams.length > 0) teams[activeTeamIdx].score += pts;
+      setTimeout(function() { showResult(true, pts); }, 500);
+    }
+  } else {
+    btn.classList.add('miss');
+    wrongGuesses.push(ch);
+    lives--;
+    updateLives();
+
+    var badge = document.createElement('span');
+    badge.className = 'wrong-letter';
+    badge.id        = 'wrong-' + ch;
+    badge.textContent = ch;
+    el('wrong-letters').appendChild(badge);
+
+    var partIdx = MAX_WRONG - lives - 1;
+    if (BODY_PARTS[partIdx]) {
+      var partEl = document.getElementById(BODY_PARTS[partIdx]);
+      if (partEl) partEl.classList.add('visible');
+    }
+
+    // Enable undo once per round while there are mistakes
+    if (!resetUsed && wrongGuesses.length > 0) {
+      el('btn-reset-mistake').disabled = false;
+    }
+
+    var wd = el('word-display');
+    wd.classList.add('shake');
+    setTimeout(function() { wd.classList.remove('shake'); }, 400);
+
+    if (lives <= 0) {
+      setTimeout(function() { showResult(false, 0); }, 600);
+    }
+  }
+}
+
+/* ── UNDO LAST MISTAKE ── */
+el('btn-reset-mistake').addEventListener('click', function() {
+  if (wrongGuesses.length === 0 || resetUsed) return;
+
+  var lastCh = wrongGuesses.pop();
+  lives = Math.min(lives + 1, MAX_WRONG);
+  guessedLetters.delete(lastCh);
+  resetUsed = true;
+
+  // Re-enable key
+  var keyBtn = document.getElementById('key-' + lastCh);
+  if (keyBtn) {
+    keyBtn.disabled = false;
+    keyBtn.classList.remove('miss');
+  }
+
+  // Remove wrong letter badge
+  var badge = document.getElementById('wrong-' + lastCh);
+  if (badge) badge.remove();
+
+  // Hide last visible body part
+  for (var i = BODY_PARTS.length - 1; i >= 0; i--) {
+    var partEl = document.getElementById(BODY_PARTS[i]);
+    if (partEl && partEl.classList.contains('visible')) {
+      partEl.classList.remove('visible');
+      break;
+    }
+  }
+
+  updateLives();
+  el('btn-reset-mistake').disabled = true;
+});
+
+function isWordGuessed() {
+  for (var i = 0; i < currentWord.length; i++) {
+    var ch = currentWord[i];
+    if (ch !== ' ' && !guessedLetters.has(ch)) return false;
+  }
+  return true;
+}
+
+function updateLives() {
+  var livesEl = el('lives-display');
+  livesEl.textContent = lives;
+  livesEl.className   = 'stat-value ' + (lives <= 2 ? 'danger' : 'safe');
+}
+
+/* ═══════════════════════════════════════════
+   RESULT SCREENS
+═══════════════════════════════════════════ */
+function showResult(won, pts) {
+  var statusEl   = el('message-status');
+  var bodyEl     = el('message-body');
+  var awardRow   = el('award-row');
+  var nextHint   = el('next-team-hint');
+
+  if (won) {
+    statusEl.textContent = 'CORRECT!';
+    statusEl.className   = 'message-status win';
+    bodyEl.innerHTML     = '<p style="font-family:\'Exo 2\',sans-serif;font-size:0.85rem;color:#4a6a8a;margin-bottom:12px;">+' + pts + ' points scored</p>';
+  } else {
+    statusEl.textContent = 'TERMINATED';
+    statusEl.className   = 'message-status lose';
+    bodyEl.innerHTML     = '<p style="font-family:\'Exo 2\',sans-serif;font-size:0.85rem;color:#4a6a8a;margin-bottom:12px;">The program crashed. No points awarded.</p>';
+    // Reveal word in red
+    for (var i = 0; i < currentWord.length; i++) {
+      var slotEl = document.getElementById('slot-' + i);
+      if (slotEl) {
+        slotEl.textContent        = currentWord[i];
+        slotEl.style.color        = 'var(--danger)';
+        slotEl.style.textShadow   = 'var(--glow-danger)';
+      }
+    }
+  }
+
+  // Award row — capture current team BEFORE advancing
+  if (teams.length > 0 && won) {
+    awardRow.style.display = 'flex';
+    awardRow.innerHTML =
+      '<span class="award-team">'     + teams[activeTeamIdx].name + '</span>' +
+      '<span>earns</span>' +
+      '<span class="award-points">+' + pts + '</span>' +
+      '<span>pts</span>';
+  } else {
+    awardRow.style.display = 'none';
+  }
+
+  // Advance team NOW (round just ended), then show who is up next
+  advanceTeam();
+
+  if (teams.length > 1) {
+    nextHint.textContent   = 'Up next: ' + teams[activeTeamIdx].name;
+    nextHint.style.display = '';
+  } else {
+    nextHint.style.display = 'none';
+  }
+
+  showEl('msg-answer-label');
+  showEl('message-word');
+  el('message-word').textContent = currentWord;
+  el('btn-next').textContent     = (round + 1 >= shuffled.length) ? 'See Results →' : 'Next Round →';
+  el('message-overlay').classList.add('active');
+}
+
+function showFinalResult() {
+  var statusEl = el('message-status');
+  var bodyEl   = el('message-body');
+  hideEl('msg-answer-label');
+  hideEl('message-word');
+  el('award-row').style.display   = 'none';
+  el('next-team-hint').style.display = 'none';
+
+  statusEl.textContent = 'COMPLETE';
+  statusEl.className   = 'message-status win';
+
+  // Leaderboard HTML
+  var lbHTML = '';
+  if (teams.length > 0) {
+    var sorted = teams.slice().sort(function(a, b) { return b.score - a.score; });
+    lbHTML = '<div class="leaderboard"><p class="leaderboard-title">Team Scores</p>';
+    sorted.forEach(function(t, i) {
+      lbHTML +=
+        '<div class="lb-row' + (i === 0 ? ' first' : '') + '">' +
+        '<span class="lb-name">' + (i === 0 ? '🏆 ' : '') + t.name + '</span>' +
+        '<span class="lb-score">' + t.score + '</span>' +
+        '</div>';
+    });
+    lbHTML += '</div>';
+  }
+
+  var max = shuffled.length * 110;
+  var pct = Math.round((score / max) * 100);
+  bodyEl.innerHTML =
+    lbHTML +
+    '<p style="font-family:\'Exo 2\',sans-serif;font-size:0.8rem;color:var(--muted);margin-bottom:4px;">Game Total · ' + pct + '% efficiency</p>' +
+    '<p style="font-family:\'Orbitron\',sans-serif;font-size:2rem;color:var(--gold);text-shadow:var(--glow-gold);margin-bottom:18px;">' + score + ' pts</p>';
+
+  el('btn-next').textContent = 'Play Again →';
+  el('message-overlay').classList.add('active');
+}
+
+/* ── NEXT / PLAY AGAIN ── */
+el('btn-next').addEventListener('click', function() {
+  if (el('btn-next').textContent.indexOf('Again') !== -1) {
+    el('message-overlay').classList.remove('active');
+    showSetup();
+    // reset team scores so setup shows zeroes
+    teams.forEach(function(t) { t.score = 0; });
+    renderTeams();
+  } else {
+    round++;
+    nextRound();
+  }
+});
+
+/* ── KEYBOARD SUPPORT ── */
+document.addEventListener('keydown', function(e) {
+  var ch = e.key.toUpperCase();
+  if (/^[A-Z]$/.test(ch) && !el('message-overlay').classList.contains('active')) {
+    var btn = document.getElementById('key-' + ch);
+    if (btn && !btn.disabled) btn.click();
+  }
+  if (e.key === 'Enter' && el('message-overlay').classList.contains('active')) {
+    el('btn-next').click();
+  }
+});
+
+/* ── BOOT ── */
+el('btn-start-game').addEventListener('click', function() {
+  showGame();
+  startGame();
+});
+
+// also allow Enter in team-input to add, already handled, but
+// prevent accidental game start from Enter on the input
+el('team-input').addEventListener('keydown', function(e) {
+  if (e.key === 'Enter') { e.stopPropagation(); }
+});
+
+function showSetup() {
+  el('setup-screen').style.display = 'flex';
+  el('game-screen').classList.remove('active');
+}
+
+function showGame() {
+  el('setup-screen').style.display = 'none';
+  el('game-screen').classList.add('active');
+}
+
+el('btn-reset-game').addEventListener('click', function() {
+  el('message-overlay').classList.remove('active');
+  teams.forEach(function(t) { t.score = 0; });
+  showSetup();
+  renderTeams();
+});
+
+// Render teams on load so hint shows
+renderTeams();
+</script>
+</body>
+</html>
